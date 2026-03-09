@@ -1,8 +1,22 @@
 # AppLogging
 
+![Python](https://img.shields.io/badge/Python-3.12+-blue?logo=python&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Maintaining-brightgreen)
+![PyPI - Version](https://img.shields.io/pypi/v/AppLogging)
+
 A drop-in, singleton logging module for Python applications. Wraps Python's standard `logging` library with session
 tracking, timed log rotation, optional console output, and safe defaults — configured once at startup and accessible
 anywhere in your project via `get_logger()`.
+
+---
+
+## Installation
+
+```bash
+pip install AppLogging
+```
+
+PyPI: [AppLogging](https://pypi.org/project/AppLogging/)
 
 ---
 
