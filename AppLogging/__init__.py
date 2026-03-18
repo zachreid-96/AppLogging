@@ -340,7 +340,7 @@ class AppLogging:
         if handlers.upper() == "BOTH" or handlers.upper() == "CONSOLE":
             cls.LOG_TO_CONSOLE = True
 
-        if is_valid_filepath(dir_log):
+        if is_valid_filepath(file_path=dir_log, platform="auto"):
             cls.LOG_DIR = dir_log
         else:
             cls.LOG_DIR = cls.DEFAULT_LOG_DIR
