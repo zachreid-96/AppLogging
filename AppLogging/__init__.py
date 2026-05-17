@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import os
 import warnings
 from datetime import datetime
@@ -8,9 +9,32 @@ from pathlib import Path
 from pathvalidate import is_valid_filepath
 
 
+class SanitizedLogger(logging.Logger):
+    def _sanitize(self, msg: object) -> str:
+        return str(msg).replace("\n", "\\n").replace("\r", "\\r")
+
+    def info(self, msg, *args, **kwargs):
+        super().info(self._sanitize(msg), *args, **kwargs)
+
+    def debug(self, msg, *args, **kwargs):
+        super().debug(self._sanitize(msg), *args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs):
+        super().warning(self._sanitize(msg), *args, **kwargs)
+
+    def error(self, msg, *args, **kwargs):
+        super().error(self._sanitize(msg), *args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs):
+        super().critical(self._sanitize(msg), *args, **kwargs)
+
+
 class AppLogging:
     _instance = None
     _initialized = False
+    _queued = False
+    _queue = None
+    _queue_listener = None
 
     ROOT_LOGGER_NAME: str = ""
 
@@ -122,6 +146,25 @@ class AppLogging:
             console_handler.setLevel(self.LOG_LEVEL_CONSOLE)
             console_handler.setFormatter(logging.Formatter(self.LOG_FORMAT_CONSOLE))
             root.addHandler(console_handler)
+
+        if self._queued:
+            self._queue = multiprocessing.Queue(-1)
+            active_handlers = root.handlers[:]
+
+            for handler in active_handlers:
+                root.removeHandler(handler)
+
+            # QueueListener owns the real handlers; they stay OFF the root logger
+            self._queue_listener = logging.handlers.QueueListener(
+                self._queue,
+                *active_handlers,
+                respect_handler_level=True,  # honors each handler's own level filter
+            )
+            self._queue_listener.start()
+
+            # Root logger gets ONLY the QueueHandler
+            queue_handler = logging.handlers.QueueHandler(self._queue)
+            root.addHandler(queue_handler)
 
     @classmethod
     def _validate_logging_format(cls, logger_format: str, handler: str) -> bool:
@@ -249,6 +292,10 @@ class AppLogging:
             )
 
     @classmethod
+    def get_queue(cls) -> multiprocessing.Queue | None:
+        return cls._queue
+
+    @classmethod
     def setup_logger(
         cls,
         name: str,
@@ -262,6 +309,8 @@ class AppLogging:
         format_file_log: str = "%(asctime)s - %(levelname)-8s - %(name)s - %(message)s",
         format_console_log: str = "%(levelname)-8s - %(name)s - %(message)s",
         format_date_log: str = "%Y-%m-%d %H:%M:%S",
+        sanitized: bool = True,
+        queued: bool = False,
     ) -> None:
         """
         Sets up Logger object based on the available passed parameters,
@@ -302,6 +351,12 @@ class AppLogging:
         format_date_log : str
             String representation of Datetime Format
                 -> Default %Y-%m-%d %H:%M:%S
+        sanitized : bool
+            Bool parameter to sanitize logs for log injection
+                -> Default True
+        queued : bool
+            Bool parameter to use a Queue Listener/Handler for threading or multiprocessing
+                -> Default False
 
         Warns
         -------
@@ -324,6 +379,12 @@ class AppLogging:
                 "\nCall reset() first if needing to reinitialize."
                 "\nOtherwise please use AppLogging.get_logger(__name__)"
             )
+
+        if sanitized:
+            logging.setLoggerClass(SanitizedLogger)
+
+        if queued:
+            cls._queued = queued
 
         cls.ROOT_LOGGER_NAME = name
 
@@ -541,6 +602,16 @@ class AppLogging:
             handler.close()
             root.removeHandler(handler)
 
+        if cls._queue_listener is not None:
+            cls._queue_listener.stop()  # flushes remaining records, then stops
+            cls._queue_listener = None
+
+        if cls._queue is not None:
+            cls._queue.close()
+            cls._queue = None
+
+        cls._queued = False
+
         cls._instance = None
         cls._initialized = False
 
@@ -555,6 +626,13 @@ class AppLogging:
         """
 
         cls._ensure_initialized()
+
+        if cls._queued:
+            warnings.warn(
+                "\n\t[AppLogging] Warning: enable_console() is not supported in queued mode."
+                "\n\t\tReinitialize with setup_logger() to change handler configuration."
+            )
+            return
 
         root = logging.getLogger(cls.ROOT_LOGGER_NAME)
         for handler in root.handlers:
@@ -580,6 +658,13 @@ class AppLogging:
         """
 
         cls._ensure_initialized()
+
+        if cls._queued:
+            warnings.warn(
+                "\n\t[AppLogging] Warning: disable_console() is not supported in queued mode."
+                "\n\t\tReinitialize with setup_logger() to change handler configuration."
+            )
+            return
 
         root = logging.getLogger(cls.ROOT_LOGGER_NAME)
         for handler in root.handlers[:]:

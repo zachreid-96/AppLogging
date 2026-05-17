@@ -55,7 +55,7 @@ starts, a session header is written to the log file so you can visually distingu
 Call `setup_logger()` once, near the top of your entry point:
 
 ```python
-from app_logging import AppLogging
+from AppLogging import AppLogging
 
 AppLogging.setup_logger(name="my_app")
 ```
@@ -63,7 +63,7 @@ AppLogging.setup_logger(name="my_app")
 Then in any module, call `get_logger()` to retrieve a logger instance:
 
 ```python
-from app_logging import AppLogging
+from AppLogging import AppLogging
 
 logger = AppLogging.get_logger(__name__)
 
@@ -83,19 +83,21 @@ logger.critical("Unrecoverable failure")
 Initializes the logger. Must be called before any other method. Raises `RuntimeError` if called after initialization —
 call `reset()` first if you need to reinitialize. Returns `None`.
 
-| Parameter            | Type          | Default               | Description                                                                                                    |
-|----------------------|---------------|-----------------------|----------------------------------------------------------------------------------------------------------------|
-| `name`               | `str`         | *(required)*          | Root logger name. Used as the log file name prefix and parent namespace.                                       |
-| `file_level`         | `str`         | `"DEBUG"`             | Minimum level written to the log file. Accepts: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.               |
-| `console_level`      | `str`         | `"INFO"`              | Minimum level written to the console (if enabled). Same accepted values.                                       |
-| `handlers`           | `str`         | `"FILE"`              | Which handlers to activate. Accepts: `"FILE"`, `"CONSOLE"`, `"BOTH"`.                                          |
-| `dir_log`            | `str \| Path` | `./logs`              | Directory where log files are written. Created automatically if it doesn't exist.                              |
-| `backup_count_log`   | `int`         | `15`                  | Number of rotated log files to retain before deletion.                                                         |
-| `rotation_log`       | `str`         | `"midnight"`          | When to rotate the log file. Accepts: `"s"`, `"m"`, `"h"`, `"d"`, `"midnight"`, `"w0"`–`"w6"` (Monday–Sunday). |
-| `interval_log`       | `int`         | `1`                   | How many units of `rotation_log` between rotations. Ignored when `rotation_log` is `"midnight"`.               |
-| `format_file_log`    | `str`         | See below             | `logging`-style format string for file output.                                                                 |
-| `format_console_log` | `str`         | See below             | `logging`-style format string for console output.                                                              |
-| `format_date_log`    | `str`         | `"%Y-%m-%d %H:%M:%S"` | `strftime`-style format string for timestamps.                                                                 |
+| Parameter            | Type          | Default               | Description                                                                                                           |
+|----------------------|---------------|-----------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `name`               | `str`         | *(required)*          | Root logger name. Used as the log file name prefix and parent namespace.                                              |
+| `file_level`         | `str`         | `"DEBUG"`             | Minimum level written to the log file. Accepts: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.                      |
+| `console_level`      | `str`         | `"INFO"`              | Minimum level written to the console (if enabled). Same accepted values.                                              |
+| `handlers`           | `str`         | `"FILE"`              | Which handlers to activate. Accepts: `"FILE"`, `"CONSOLE"`, `"BOTH"`.                                                 |
+| `dir_log`            | `str \| Path` | `./logs`              | Directory where log files are written. Created automatically if it doesn't exist.                                     |
+| `backup_count_log`   | `int`         | `15`                  | Number of rotated log files to retain before deletion.                                                                |
+| `rotation_log`       | `str`         | `"midnight"`          | When to rotate the log file. Accepts: `"s"`, `"m"`, `"h"`, `"d"`, `"midnight"`, `"w0"`–`"w6"` (Monday–Sunday).        |
+| `interval_log`       | `int`         | `1`                   | How many units of `rotation_log` between rotations. Ignored when `rotation_log` is `"midnight"`.                      |
+| `format_file_log`    | `str`         | See below             | `logging`-style format string for file output.                                                                        |
+| `format_console_log` | `str`         | See below             | `logging`-style format string for console output.                                                                     |
+| `format_date_log`    | `str`         | `"%Y-%m-%d %H:%M:%S"` | `strftime`-style format string for timestamps.                                                                        |
+| `sanitized`          | `bool`        | True                  | Sanitizes log messages against log injection by escaping newline characters.                                          |
+| `queue`              | `bool`        | False                 | Routes all log records through a multiprocessing.Queue and QueueListener. For multi-thread/process or high log volume |
 
 **Default file format:** `%(asctime)s - %(levelname)-8s - %(name)s - %(message)s`  
 **Default console format:** `%(levelname)-8s - %(name)s - %(message)s`
@@ -136,6 +138,14 @@ new handler at the configured `console_level`.
 
 Closes and removes all handlers, then resets the singleton state. After calling this, `setup_logger()` can be called
 again with new configuration.
+
+---
+
+### `AppLogging.get_queue()` — *classmethod*
+
+Returns the active `multiprocessing.Queue` instance if `queue=True` was passed to `setup_logger()`, otherwise returns
+`None`. Use this to pass the queue into worker processes so they can attach their own `QueueHandler` and route records
+back through the listener.
 
 ---
 
@@ -203,3 +213,7 @@ system if needed.
   module calls it.
 - `disable_console()` fully removes the console handler. `enable_console()` reconstructs and re-attaches it at the
   configured `console_level`.
+- When `sanitized=True` (default), newline characters in log messages are escaped before writing, preventing log
+  injection from external or user-supplied data.
+- When `queue=True`, real handlers are owned by the `QueueListener` and detached from the root logger. Calling
+  `enable_console()` or `disable_console()` will throw an intentional warning about not being supported.
