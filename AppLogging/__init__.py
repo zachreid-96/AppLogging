@@ -4,6 +4,7 @@ import os
 import warnings
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
+from multiprocessing.queues import Queue
 from pathlib import Path
 
 from pathvalidate import is_valid_filepath
@@ -292,7 +293,7 @@ class AppLogging:
             )
 
     @classmethod
-    def get_queue(cls) -> multiprocessing.Queue | None:
+    def get_queue(cls) -> Queue | None:
         return cls._queue
 
     @classmethod
